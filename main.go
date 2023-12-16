@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 )
 
 const keyServerAddr = "serverAddr"
@@ -40,10 +41,49 @@ func getHello(w http.ResponseWriter, r *http.Request){
     io.WriteString(w,"Hello\n")
 }
 
+func uploadHandler(w http.ResponseWriter, r *http.Request){
+    err := r.ParseMultipartForm(10 << 20)
+    if err != nil {
+        fmt.Printf("err: %s\n",err)
+        return
+    }
+    
+    fileHeaders := r.MultipartForm.File["file"]
+
+    for _,fileHeader := range fileHeaders {
+        file, err := fileHeader.Open()
+        if err != nil {
+            fmt.Printf("error: %s\n",err)
+        }
+        defer file.Close()
+
+        dst, err := os.Create(fileHeader.Filename)
+
+        defer dst.Close()
+
+        io.Copy(dst,file)
+
+        io.WriteString(w, "file uploaded\n")
+    }
+}
+
+func downHandler(w http.ResponseWriter, r *http.Request){
+    filePath := "/home/chitreshn/foo"
+    file, _ := os.Open(filePath)
+    defer file.Close()
+
+    w.Header().Set("Content-Disposition", "attachment; filename="+filePath)
+	w.Header().Set("Content-Type", "application/octet-stream")
+
+    io.Copy(w, file)
+}
+
 func main(){
     mux := http.NewServeMux()
     mux.HandleFunc("/",getRoot)
     mux.HandleFunc("/hello", getHello)
+    mux.HandleFunc("/upload", uploadHandler)
+    mux.HandleFunc("/download", downHandler)
 
     ctx, cancelCtx := context.WithCancel(context.Background())
     serverOne := &http.Server{
@@ -83,4 +123,3 @@ func main(){
 
     <-ctx.Done()
 }
-
